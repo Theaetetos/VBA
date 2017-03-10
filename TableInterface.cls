@@ -15,8 +15,7 @@ Private qry_coll As New Collection
 
 Property Set TableRange(Rng As Range)
 
-'set tbl_rng property; and
-'fill tbl_arr
+'sets tbl_rng property and fills tbl_arr
 
 '--------------------------
 
@@ -32,9 +31,9 @@ Set TableRange = tbl_rng
 
 End Property
 
-Property Let TableArray(arr As Variant)
+Property Let TableArray(Arr As Variant)
 
-tbl_arr = arr
+tbl_arr = Arr
 
 End Property
 
@@ -52,9 +51,11 @@ End Property
 
 Public Sub ExecuteQuery(ConnectionString As String, SQL As String)
 
-'executes passed-in sql str using ADO connection to passed-in serv and db
+'executes passed-in sql str using passed-in connection str
 'saves result as collection of fields (also collections) in qry_coll
-'assumes user may use a trusted connection
+
+'method of saving as collections chosen because less likely to cause overflow with large datasets
+'   largest query successfully saved: 541000x22 (yes, it took forever)
 
 '---------------------------------
 
@@ -64,32 +65,31 @@ conn.Open ConnectionString
 Dim rs As New ADODB.Recordset
 With rs
     Application.StatusBar = "TableInterface: Executing query..."
-    .Open SQL, conn, adOpenForwardOnly
+    .Open SQL, conn, adOpenForwardOnly, adLockReadOnly 'forward-only chosen for performance
     Application.StatusBar = "TableInterface: Saving query results..."
     Dim query As New Collection
-    Dim coll As Collection
-    Dim fld_ct As Long, i As Long
-    fld_ct = .Fields.Count
-    For i = 1 To fld_ct
-        Set coll = New Collection
-        query.ADD coll
+    Dim Coll As Collection
+    Dim i As Long
+    For i = 1 To .Fields.Count 'add an empty collection to query collection for each field in recordset
+        Set Coll = New Collection
+        query.ADD Coll
     Next i
     Dim f As Field
-    Do While Not .EOF
-        i = 1
+    Do While Not .EOF 'loop through fields, adding record in each field to corresponding collection in query collection
+        i = 1 'counter to reference collection with query collection
         For Each f In .Fields
-            Set coll = query(i)
-            coll.ADD f.Value
-            Set coll = Nothing
+            Set Coll = query(i)
+            Coll.ADD f.Value
+            Set Coll = Nothing
             i = i + 1
         Next f
         .MoveNext
     Loop
     i = 1
-    For Each f In .Fields
-        Set coll = query(i)
-        coll.ADD f.Name, Before:=1
-        Set coll = Nothing
+    For Each f In .Fields 'add field headers at beginning of each collection
+        Set Coll = query(i)
+        Coll.ADD f.Name, Before:=1
+        Set Coll = Nothing
         i = i + 1
     Next f
     .Close
@@ -104,36 +104,9 @@ Application.StatusBar = False
 
 End Sub
 
-Public Function GetQueryArray(Index As Integer) As Variant
-
-'returns a base-1 array of the query results stored at the passed-in index
-'dynamically deletes query results to save memory
-
-'----------------------------------------------
-
-Application.StatusBar = "Saving TableInterface query " & Index & " as array..."
-
-Dim return_arr As Variant, v As Variant
-ReDim return_arr(1 To qry_coll(Index)(1).Count, 1 To qry_coll(Index).Count)
-
-Dim i As Long
-Dim j As Integer
-For i = 1 To UBound(return_arr, 1)
-    For j = 1 To UBound(return_arr, 2)
-        return_arr(i, j) = qry_coll(Index)(j)(1)
-        qry_coll(Index)(j).Remove (1)
-    Next j
-Next i
-
-GetQueryArray = return_arr
-
-Application.StatusBar = False
-
-End Function
-
 Public Sub EditTableArray(RowIndex As Long, ColumnIndex As Integer, NewValue As Variant)
 
-'use to update a single value at passed-in indices in tbl_arr
+'updates a single value at passed-in indices in tbl_arr
 
 '-------------------------------------------------
 
@@ -141,19 +114,19 @@ tbl_arr(RowIndex, ColumnIndex) = NewValue
 
 End Sub
 
-Public Sub ResizeTable(arr As Variant, Optional KeepColumns As Boolean = True)
+Public Sub ResizeTable(Arr As Variant, Optional KeepColumns As Boolean = True)
 
 'resizes tbl_rng and tbl_arr to fit passed-in arr dimensions
 
 '---------------------------------------------------------
 
 Dim row_ct As Long
-row_ct = UBound(arr, 1) - LBound(arr, 1) + 1
+row_ct = UBound(Arr, 1) - LBound(Arr, 1) + 1
 Set tbl_rng = tbl_rng.Resize(row_ct, tbl_rng.Columns.Count)
 
 If KeepColumns = False Then
     Dim col_ct As Integer
-    col_ct = UBound(arr, 2) - LBound(arr, 1) + 1
+    col_ct = UBound(Arr, 2) - LBound(Arr, 1) + 1
     Set tbl_rng = tbl_rng.Resize(row_ct, col_ct)
 End If
 
@@ -170,8 +143,7 @@ Public Sub Fill(Data As Variant)
 
 '----------------
 
-'ADD: param checks
-
+'check that Data is a 2d array
 
 Dim data_col_id As Integer, i As Integer, j As Integer, corr As Integer
 If LBound(tbl_arr, 1) = 0 And LBound(Data, 1) = 1 Then corr = 1
@@ -199,6 +171,97 @@ arr_row_ct = UBound(tbl_arr, 1) - LBound(tbl_arr, 1) + 1
 arr_col_ct = UBound(tbl_arr, 2) - LBound(tbl_arr, 2) + 1
 
 Set tbl_rng = tbl_rng.Resize(arr_row_ct, arr_col_ct)
-tbl_rng.Value = tbl_arr
+With tbl_rng
+    .Value = tbl_arr
+    .Columns.AutoFit
+End With
 
 End Sub
+
+Public Function GetQueryArray(Index As Integer) As Variant
+
+'returns a base-1 array of the query results stored at the passed-in index
+'dynamically deletes query results to save memory
+
+'----------------------------------------------
+
+Application.StatusBar = "Saving TableInterface query " & Index & " as array..."
+
+Dim return_arr As Variant
+ReDim return_arr(1 To qry_coll(Index)(1).Count, 1 To qry_coll(Index).Count)
+
+Dim i As Long
+Dim j As Integer
+For i = 1 To UBound(return_arr, 1)
+    For j = 1 To UBound(return_arr, 2)
+        return_arr(i, j) = qry_coll(Index)(j)(1)
+        qry_coll(Index)(j).Remove (1)
+    Next j
+Next i
+
+GetQueryArray = return_arr
+
+Application.StatusBar = False
+
+End Function
+
+Private Function GetArrColId(s As String, a As Variant) As Integer
+
+'returns the colid within a passed-in array of a passed-in string
+'   although array must be two-dimensional for function to work, will only search first row
+'   will find match of any type implicitly convertible to string
+'returns -1 if s not found
+'returns -2 if a is not 2d
+'meant to mirror finding a table header
+
+'---------------------------------------------------
+
+'check dimensions of a
+If GetArrDimensions(a) <> 2 Then
+    GetArrColId = -2
+    Exit Function
+End If
+
+Dim i As Integer
+i = LBound(a, 2)
+GetArrColId = -1
+
+'loop through first row until s is found
+Do Until i > UBound(a, 2)
+    If Trim(CStr(a(LBound(a, 1), i))) = s Then
+        GetArrColId = i
+        Exit Do
+    End If
+    i = i + 1
+Loop
+
+End Function
+
+Private Function GetArrDimensions(Arr As Variant) As Integer
+
+'returns the number of dimensions of passed-in array
+
+'----------------------------------------
+
+Dim i As Long, dims As Integer
+Dim done As Boolean
+dims = 1
+
+Do Until done = True
+    On Error GoTo dims:
+    i = UBound(Arr, dims)
+    On Error GoTo 0
+    If done = True Then Exit Do
+    dims = dims + 1
+Loop
+
+Exit Function
+
+dims:
+done = True
+dims = dims - 1
+GetArrDimensions = dims
+
+Resume Next
+
+End Function
