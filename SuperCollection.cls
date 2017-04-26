@@ -14,7 +14,7 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
-Private cols As Collection
+Private cols As New Collection
 
 Property Set ColumnCollection(Coll As Collection)
 
@@ -28,26 +28,40 @@ Set ColumnCollection = cols
 
 End Property
 
-Public Sub AddColumn(Coll As Collection, Optional Index As Integer)
+Property Get FieldCount() As Long
+
+FieldCount = cols.Count
+
+End Property
+
+Property Get RecordCount() As Long
+
+If cols.Count > 0 Then
+    RecordCount = cols(1).Count
+Else
+    RecordCount = 0
+End If
+
+End Property
+
+Public Sub InsertColumn(Coll As Collection, Optional Index As Integer)
 
 'adds a passed-in collection to cols at index
-'Index is checked to make sure 1<=Index<=cols.Count+1
+'Index is checked to make sure 1<=Index<=cols.Count
 '   defaults to adding column after last
 'Index corresponds to the index of Coll after it will have been added
 
 '-----------------------------------------------------------
 
-Dim coll_ct As Long
-coll_ct = Coll.Count
-If Index < 1 Or Index > coll_ct + 1 Then
-    cols.ADD Coll
+If Index < 1 Or Index > FieldCount Then
+    cols.Add Coll
 Else
-    cols.ADD Coll, Before:=Index
+    cols.Add Coll, Before:=Index
 End If
 
 End Sub
 
-Public Sub AddEmptyColumn(Optional Index As Integer)
+Public Sub AddColumn(Optional Index As Integer)
 
 'creates a new, empty "column" at Index
 '   Index is checked to make sure 1<=Index<=cols.Count+1
@@ -56,13 +70,71 @@ Public Sub AddEmptyColumn(Optional Index As Integer)
 '---------------------------------------
 
 Dim Coll As New Collection
-Dim coll_ct As Long
-coll_ct = Coll.Count
-If Index < 1 Or Index > coll_ct + 1 Then
-    cols.ADD Coll
+If Index < 1 Or Index > FieldCount Then
+    cols.Add Coll
 Else
-    cols.ADD Coll, Before:=Index
+    cols.Add Coll, Before:=Index
 End If
+
+End Sub
+
+Public Sub RemoveColumn(Optional Index As Integer)
+
+'removes field collection at Index
+'   Index is checked to make sure 1<=Index<=FieldCount
+'   if improper value supplied, defaults to removing last column
+
+'---------------------------------------
+
+If Index < 1 Or Index > FieldCount Then
+    cols.Remove FieldCount
+Else
+    cols.Remove Index
+End If
+
+End Sub
+
+Public Sub ReadArray(ByRef arr As Variant, Optional Tilted As Boolean)
+
+'stores Arr columns (or rows if Tilted=True) as collections in cols
+'overwrites any existing data in cols
+
+'-------------------------------------------
+
+'read array
+Dim col_coll As New Collection
+Dim Coll As Collection
+Dim i As Long
+Dim col_ct As Integer, j As Integer, arr_lbound As Integer, corr As Integer
+If Tilted = False Then
+    arr_lbound = LBound(arr, 2)
+    If arr_lbound = 0 Then corr = 1
+    col_ct = UBound(arr, 2) - arr_lbound + 1
+    For j = 1 To col_ct
+        Set Coll = New Collection
+        col_coll.Add Coll
+    Next j
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        For j = arr_lbound To UBound(arr, 2)
+            col_coll(j + corr).Add arr(i, j)
+        Next j
+    Next i
+Else
+    arr_lbound = LBound(arr, 1)
+    If arr_lbound = 0 Then corr = 1
+    col_ct = UBound(arr, 1) - arr_lbound + 1
+    For j = 1 To col_ct
+        Set Coll = New Collection
+        col_coll.Add Coll
+    Next j
+    For j = arr_lbound To UBound(arr, 1)
+        For i = LBound(arr, 2) To UBound(arr, 2)
+            col_coll(j + corr).Add arr(j, i)
+        Next i
+    Next j
+End If
+
+Set cols = col_coll
 
 End Sub
 
@@ -123,10 +195,11 @@ End If
 
 'loop through temp, adding item at position 1 to each collection in cols
 For i = LBound(temp) To UBound(temp)
-    cols(i).ADD Trim(temp(i)), Before:=1
+    cols(i).Add Trim(temp(i)), Before:=1
 Next i
 
 End Sub
+
 
 Public Sub ConvertHeaders(HeaderPairs As Variant)
 
@@ -187,14 +260,14 @@ Else
 End If
 
 'loop through temp, attempting to match odd elements to first items in column collections
-Dim str As String
+Dim Str As String
 Dim j As Integer
 For i = LBound(temp) To UBound(temp) Step 2
-    str = Trim(temp(i))
+    Str = Trim(temp(i))
     For j = 1 To cols.Count
-        If str = Trim(CStr(cols(j)(1))) Then
+        If Str = Trim(CStr(cols(j)(1))) Then
             cols(j).Remove (1)
-            cols(j).ADD Trim(temp(i + 1)), Before:=1
+            cols(j).Add Trim(temp(i + 1)), Before:=1
             Exit For
         End If
     Next j
@@ -202,7 +275,33 @@ Next i
 
 End Sub
 
-Public Function Index(Header As String) As Integer
+Public Sub RemoveHeaders()
+
+Dim i As Integer
+For i = 1 To cols.Count
+    cols(i).Remove (1)
+Next i
+
+End Sub
+
+Public Sub Update(Index As Integer, Key As Long, NewValue As Variant)
+
+'updates the value in a given column collection at the given key value
+
+'-----------------------------------------------------------------
+
+With cols(Index)
+    .Remove (Key)
+    If Key <= .Count Then
+        .Add NewValue, Before:=Key
+    Else
+        .Add NewValue
+    End If
+End With
+
+End Sub
+
+Public Function Index(header As String) As Integer
 
 'returns index of passed-in header
 'returns 0 if unable to find
@@ -211,11 +310,33 @@ Public Function Index(Header As String) As Integer
 
 Dim i As Integer
 For i = 1 To cols.Count
-    If Trim(Header) = Trim(CStr(cols(i))) Then
+    If Trim(header) = Trim(CStr(cols(i)(1))) Then
         Index = i
         Exit For
     End If
 Next i
+
+End Function
+
+Public Function Key(Str As String, Index As Integer) As Long
+
+'returns "row" (index) in which passed-in string appears in "column" Index
+'returns 0 if not found
+
+'-------------------------------------------
+
+Dim coll_ct As Long
+coll_ct = cols(Index).Count
+
+If coll_ct > 0 Then
+    Dim l As Long
+    For l = 1 To coll_ct
+        If Trim(CStr(cols(Index)(l))) = Str Then
+            Key = l
+            Exit Function
+        End If
+    Next l
+End If
 
 End Function
 
@@ -225,7 +346,7 @@ Public Function Subset(Indices As Variant, Optional PreserveColumns As Boolean) 
 'columns returned in order they appear in Indices
 'a comma-separated string or a 1d or 2d array may be passed to Indices
 '   values not corresponding to "columns" are ignored
-'   values are ignored (index corresponding to a header may be found using Index method)
+'   strings are ignored (index corresponding to a header may be found using Index method)
 'if PreserveColumns=False, columns selected out will be deleted from object
 
 '-------------------------------------------------------------------
@@ -274,15 +395,19 @@ For i = LBound(temp) To UBound(temp)
         col_ct = cols(cur_index).Count
         For j = 1 To col_ct
             If PreserveColumns = True Then
-                Coll.ADD cols(cur_index)(j)
+                Coll.Add cols(cur_index)(j)
             Else
-                Coll.ADD cols(cur_index)(1)
+                Coll.Add cols(cur_index)(1)
                 cols(cur_index).Remove (1)
             End If
         Next j
+        col_coll.Add Coll
         col_ct = cols.Count
     End If
 Next i
+
+Set Subset = New SuperCollection
+Set Subset.ColumnCollection = col_coll
 
 'remove specified cols from SC if user specifies
 If PreserveColumns = False Then
@@ -303,36 +428,7 @@ End If
 
 End Function
 
-Public Function ReadArray(ByRef Arr As Variant, Optional Overwrite As Boolean, Optional Tilted As Boolean) As SuperCollection
-
-'stores Arr columns (or rows if Tilted=True) as collections in cols
-'if Overwrite is False, returns a new SuperCollection; if not, overwrites any items in cols
-
-'-------------------------------------------
-
-'read array
-Dim col_coll As New Collection
-Dim col_ct As Integer
-If Tilted = False Then
-    col_ct = UBound(Arr, 2) - LBound(Arr, 2) + 1
-    
-Else
-    col_ct = UBound(Arr, 1) - LBound(Arr, 1) + 1
-    
-End If
-
-'output according to user specification
-If Overwrite = False Then
-    Set ReadArray.ColumnCollection = col_coll
-Else
-    Set cols = col_coll
-End If
-
-Set ReadArray = Nothing
-
-End Function
-
-Public Function ToArray(Optional PreserveColumns As Boolean, Optional Tilted As Boolean) As Variant
+Public Function ToArray(Optional PreserveColumns As Boolean = False, Optional Tilted As Boolean = False) As Variant
 
 'converts object to an array record-by-record
 'if PreserveColumns=False, deletes records as it goes to save memory
@@ -341,7 +437,41 @@ Public Function ToArray(Optional PreserveColumns As Boolean, Optional Tilted As 
 
 '----------------------------------------------
 
+Dim return_arr As Variant
+Dim i As Long
+Dim j As Integer
 
+If Tilted = False Then
+    
+    ReDim return_arr(1 To cols(1).Count, 1 To cols.Count)
+    For i = 1 To UBound(return_arr, 1)
+        For j = 1 To UBound(return_arr, 2)
+            If PreserveColumns = False Then
+                return_arr(i, j) = cols(j)(1)
+                cols(j).Remove (1)
+            Else
+                return_arr(i, j) = cols(j)(i)
+            End If
+        Next j
+    Next i
+    
+Else
+    
+    ReDim return_arr(1 To cols.Count, 1 To cols(1).Count)
+    For i = 1 To UBound(return_arr, 2)
+        For j = 1 To UBound(return_arr, 1)
+            If PreserveColumns = False Then
+                return_arr(j, i) = cols(j)(1)
+                cols(j).Remove (1)
+            Else
+                return_arr(j, i) = cols(j)(i)
+            End If
+        Next j
+    Next i
+    
+End If
+
+ToArray = return_arr
 
 End Function
 
@@ -371,7 +501,7 @@ MsgBox _
 
 End Sub
 
-Private Function GetArrDimensions(Arr As Variant) As Integer
+Private Function GetArrDimensions(arr As Variant) As Integer
 
 'returns the number of dimensions of passed-in array
 
@@ -383,7 +513,7 @@ dims = 1
 
 Do Until done = True
     On Error GoTo dims:
-    i = UBound(Arr, dims)
+    i = UBound(arr, dims)
     On Error GoTo 0
     If done = True Then Exit Do
     dims = dims + 1
@@ -400,7 +530,7 @@ Resume Next
 
 End Function
 
-Private Function strToArr(str As String, Optional delim As String = ",") As Variant
+Private Function strToArr(Str As String, Optional delim As String = ",") As Variant
 
 'performs Split on str using passed in delimiter, then ensures all elements in resulting array are integers
 'non-numeric values are deleted
@@ -408,7 +538,7 @@ Private Function strToArr(str As String, Optional delim As String = ",") As Vari
 '----------------------------------------------------------------------------
 
 Dim return_arr As Variant
-return_arr = Split(str, delim)
+return_arr = Split(Str, delim)
 
 Dim i As Integer, j As Integer, ubound_1 As Integer
 i = 0
