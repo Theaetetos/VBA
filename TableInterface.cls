@@ -31,9 +31,9 @@ Set TableRange = tbl_rng
 
 End Property
 
-Property Let TableArray(Arr As Variant)
+Property Let TableArray(arr As Variant)
 
-tbl_arr = Arr
+tbl_arr = arr
 
 End Property
 
@@ -55,7 +55,7 @@ Public Sub ExecuteQuery(ConnectionString As String, SQL As String)
 'saves result as collection of fields (also collections) in qry_coll
 
 'method of saving as collections chosen because less likely to cause overflow with large datasets
-'   largest query successfully saved: 541000x22 (yes, it took forever)
+'   largest query successfully saved: 541000x22 after previous failure with arrays (including GetRows method of Recordset class) (yes, it took forever)
 
 '---------------------------------
 
@@ -72,33 +72,33 @@ With rs
     Dim i As Long
     For i = 1 To .Fields.Count 'add an empty collection to query collection for each field in recordset
         Set Coll = New Collection
-        query.ADD Coll
+        query.Add Coll
     Next i
     Dim f As Field
+    i = 1
+    For Each f In .Fields 'add field headers at beginning of each collection
+        Set Coll = query(i)
+        Coll.Add f.Name
+        Set Coll = Nothing
+        i = i + 1
+    Next f
     Do While Not .EOF 'loop through fields, adding record in each field to corresponding collection in query collection
         i = 1 'counter to reference collection with query collection
         For Each f In .Fields
             Set Coll = query(i)
-            Coll.ADD f.Value
+            Coll.Add f.Value
             Set Coll = Nothing
             i = i + 1
         Next f
         .MoveNext
     Loop
-    i = 1
-    For Each f In .Fields 'add field headers at beginning of each collection
-        Set Coll = query(i)
-        Coll.ADD f.Name, Before:=1
-        Set Coll = Nothing
-        i = i + 1
-    Next f
     .Close
     Set rs = Nothing
 End With
 conn.Close
 Set conn = Nothing
 
-qry_coll.ADD query
+qry_coll.Add query
 
 Application.StatusBar = False
 
@@ -114,19 +114,19 @@ tbl_arr(RowIndex, ColumnIndex) = NewValue
 
 End Sub
 
-Public Sub ResizeTable(Arr As Variant, Optional KeepColumns As Boolean = True)
+Public Sub ResizeTable(arr As Variant, Optional KeepColumns As Boolean = True)
 
 'resizes tbl_rng and tbl_arr to fit passed-in arr dimensions
 
 '---------------------------------------------------------
 
 Dim row_ct As Long
-row_ct = UBound(Arr, 1) - LBound(Arr, 1) + 1
+row_ct = UBound(arr, 1) - LBound(arr, 1) + 1
 Set tbl_rng = tbl_rng.Resize(row_ct, tbl_rng.Columns.Count)
 
 If KeepColumns = False Then
     Dim col_ct As Integer
-    col_ct = UBound(Arr, 2) - LBound(Arr, 1) + 1
+    col_ct = UBound(arr, 2) - LBound(arr, 1) + 1
     Set tbl_rng = tbl_rng.Resize(row_ct, col_ct)
 End If
 
@@ -145,14 +145,14 @@ Public Sub Fill(Data As Variant)
 
 'check that Data is a 2d array
 
-Dim data_col_id As Integer, i As Integer, j As Integer, corr As Integer
+Dim data_col_id As Integer, i As Integer, j As Long, corr As Integer
 If LBound(tbl_arr, 1) = 0 And LBound(Data, 1) = 1 Then corr = 1
 If LBound(tbl_arr, 1) = 1 And LBound(Data, 1) = 0 Then corr = -1
 For i = LBound(tbl_arr, 2) To UBound(tbl_arr, 2)
     data_col_id = GetArrColId(CStr(tbl_arr(1, i)), Data)
     If data_col_id > -1 Then
         For j = LBound(tbl_arr, 1) + 1 To UBound(tbl_arr, 1)
-            tbl_arr(j, i) = Data(LBound(Data, 1) + corr + j, data_col_id)
+            tbl_arr(j, i) = Data(corr + j, data_col_id)
         Next j
     End If
 Next i
@@ -199,6 +199,8 @@ For i = 1 To UBound(return_arr, 1)
     Next j
 Next i
 
+qry_coll.Remove (Index)
+
 GetQueryArray = return_arr
 
 Application.StatusBar = False
@@ -237,7 +239,7 @@ Loop
 
 End Function
 
-Private Function GetArrDimensions(Arr As Variant) As Integer
+Private Function GetArrDimensions(arr As Variant) As Integer
 
 'returns the number of dimensions of passed-in array
 
@@ -249,7 +251,7 @@ dims = 1
 
 Do Until done = True
     On Error GoTo dims:
-    i = UBound(Arr, dims)
+    i = UBound(arr, dims)
     On Error GoTo 0
     If done = True Then Exit Do
     dims = dims + 1
