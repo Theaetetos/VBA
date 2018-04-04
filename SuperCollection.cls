@@ -16,9 +16,9 @@ Option Explicit
 
 Private cols As New Collection
 
-Property Set ColumnCollection(Coll As Collection)
+Property Set ColumnCollection(coll As Collection)
 
-Set cols = Coll
+Set cols = coll
 
 End Property
 
@@ -44,7 +44,7 @@ End If
 
 End Property
 
-Public Sub InsertColumn(Coll As Collection, Optional Index As Integer)
+Public Sub InsertColumn(coll As Collection, Optional Index As Integer)
 
 'adds a passed-in collection to cols at index
 'Index is checked to make sure 1<=Index<=cols.Count
@@ -54,9 +54,9 @@ Public Sub InsertColumn(Coll As Collection, Optional Index As Integer)
 '-----------------------------------------------------------
 
 If Index < 1 Or Index > FieldCount Then
-    cols.Add Coll
+    cols.Add coll
 Else
-    cols.Add Coll, Before:=Index
+    cols.Add coll, Before:=Index
 End If
 
 End Sub
@@ -69,11 +69,11 @@ Public Sub AddColumn(Optional Index As Integer)
 
 '---------------------------------------
 
-Dim Coll As New Collection
+Dim coll As New Collection
 If Index < 1 Or Index > FieldCount Then
-    cols.Add Coll
+    cols.Add coll
 Else
-    cols.Add Coll, Before:=Index
+    cols.Add coll, Before:=Index
 End If
 
 End Sub
@@ -103,7 +103,7 @@ Public Sub ReadArray(ByRef arr As Variant, Optional Tilted As Boolean)
 
 'read array
 Dim col_coll As New Collection
-Dim Coll As Collection
+Dim coll As Collection
 Dim i As Long
 Dim col_ct As Integer, j As Integer, arr_lbound As Integer, corr As Integer
 If Tilted = False Then
@@ -111,8 +111,8 @@ If Tilted = False Then
     If arr_lbound = 0 Then corr = 1
     col_ct = UBound(arr, 2) - arr_lbound + 1
     For j = 1 To col_ct
-        Set Coll = New Collection
-        col_coll.Add Coll
+        Set coll = New Collection
+        col_coll.Add coll
     Next j
     For i = LBound(arr, 1) To UBound(arr, 1)
         For j = arr_lbound To UBound(arr, 2)
@@ -124,8 +124,8 @@ Else
     If arr_lbound = 0 Then corr = 1
     col_ct = UBound(arr, 1) - arr_lbound + 1
     For j = 1 To col_ct
-        Set Coll = New Collection
-        col_coll.Add Coll
+        Set coll = New Collection
+        col_coll.Add coll
     Next j
     For j = arr_lbound To UBound(arr, 1)
         For i = LBound(arr, 2) To UBound(arr, 2)
@@ -226,16 +226,16 @@ If dims = 0 Then
         Exit Sub
     End If
 ElseIf dims = 1 Then
-    If UBound(HeaderPairs, 1) - LBound(HeaderPairs, 1) + 1 Mod 2 = 0 Then
+    If (UBound(HeaderPairs, 1) - LBound(HeaderPairs, 1) + 1) Mod 2 = 0 Then
         temp = HeaderPairs
     Else
         elemErr
         Exit Sub
     End If
 ElseIf dims = 2 Then
-    If UBound(HeaderPairs, 2) - LBound(HeaderPairs, 2) + 1 Mod 2 = 0 Then
+    If (UBound(HeaderPairs, 2) - LBound(HeaderPairs, 2) + 1) Mod 2 = 0 Then
         read_dim = 2
-    ElseIf UBound(HeaderPairs, 1) - LBound(HeaderPairs, 1) + 1 Mod 2 = 0 Then
+    ElseIf (UBound(HeaderPairs, 1) - LBound(HeaderPairs, 1) + 1) Mod 2 = 0 Then
         read_dim = 1
     Else
         elemErr
@@ -301,7 +301,7 @@ End With
 
 End Sub
 
-Public Function Index(header As String) As Integer
+Public Function Index(Header As String) As Integer
 
 'returns index of passed-in header
 'returns 0 if unable to find
@@ -310,7 +310,7 @@ Public Function Index(header As String) As Integer
 
 Dim i As Integer
 For i = 1 To cols.Count
-    If Trim(header) = Trim(CStr(cols(i)(1))) Then
+    If Trim(Header) = Trim(CStr(cols(i)(1))) Then
         Index = i
         Exit For
     End If
@@ -385,23 +385,24 @@ End If
 
 'compile new column collection to populate SuperCollection to be returned
 Dim col_coll As New Collection
-Dim Coll As Collection
-Dim cur_index As Integer, col_ct As Integer, j As Integer
+Dim coll As Collection
+Dim cur_index As Integer
+Dim col_ct As Long, j As Long
 col_ct = cols.Count
 For i = LBound(temp) To UBound(temp)
     cur_index = temp(i)
     If cur_index > 0 And cur_index <= col_ct Then
-        Set Coll = New Collection
+        Set coll = New Collection
         col_ct = cols(cur_index).Count
         For j = 1 To col_ct
             If PreserveColumns = True Then
-                Coll.Add cols(cur_index)(j)
+                coll.Add cols(cur_index)(j)
             Else
-                Coll.Add cols(cur_index)(1)
+                coll.Add cols(cur_index)(1)
                 cols(cur_index).Remove (1)
             End If
         Next j
-        col_coll.Add Coll
+        col_coll.Add coll
         col_ct = cols.Count
     End If
 Next i
@@ -422,7 +423,7 @@ If PreserveColumns = False Then
             End If
         Next i
     Else
-        cols.Remove (temp(LBound(temp)))
+        cols.Remove CInt(temp(LBound(temp)))
     End If
 End If
 
