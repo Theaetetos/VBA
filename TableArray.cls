@@ -21,12 +21,12 @@ Private Enum TableArrayErrorCode
 End Enum
 
 
-Private recs As Variant
-Private col_names As Variant
-Private is_text As Variant
-Private rng As Range
-Private conn_str As String
-Dim conn As ADODB.Connection
+Private recs As Variant ' array of records to pass between Excel and SQLServer
+Private col_names As Variant ' 1d array of column names for recs
+Private is_text As Variant ' 1d array of Booleans specifying whether or not column in recs is a text type
+Private rng As Range ' range linked to class instance to read or print recs to
+Private conn_str As String ' connection string to use when connecting to SQLServer
+Dim conn As ADODB.Connection ' connection to SQLServer (opened and closed in class methods)
 
 
 Property Let Records(RecordsArray As Variant)
@@ -388,13 +388,15 @@ Private Sub execute_qry(sql_str As String, Optional sproc As Boolean)
         .Open Source:=cmd
         
         If .State = adStateOpen Then
+            
+            'add field headers to headers collection and an empty collection to records collection for each field in recordset
+            For Each f In .Fields
+                header_coll.Add f.Name
+                Set coll = New Collection
+                rec_coll.Add coll
+            Next f
+            
             If Not .EOF Then
-                'add field headers to headers collection and an empty collection to records collection for each field in recordset
-                For Each f In .Fields
-                    header_coll.Add f.Name
-                    Set coll = New Collection
-                    rec_coll.Add coll
-                Next f
                 
                 'loop through fields and rows, adding record in each field to corresponding collection in query collection
                 Do While Not .EOF
@@ -726,7 +728,11 @@ Public Sub PrintToLinkedRange(Optional PreserveHeaders As Boolean = True)
     If PreserveHeaders Then
         ClearLinkedRange
         
-        recs_row_lbound = LBound(recs, 1)
+        If IsEmpty(recs) Then
+            Exit Sub
+        Else
+            recs_row_lbound = LBound(recs, 1)
+        End If
         
         ReDim arr(1 To UBound(recs, 1) - recs_row_lbound + 2, 1 To UBound(recs, 2) - LBound(recs, 2) + 1) ' extra row is for headers
         With rng
@@ -758,6 +764,10 @@ Public Sub PrintToLinkedRange(Optional PreserveHeaders As Boolean = True)
         End With
     Else
         ClearLinkedRange Headers:=True
+        
+        If IsEmpty(recs) Then
+            Exit Sub
+        End If
         
         With rng
             .Resize(1, UBound(col_names) - LBound(col_names) + 1).Value = col_names
